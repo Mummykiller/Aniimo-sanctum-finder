@@ -9,11 +9,11 @@ export OPENCV_OPENCL_RUNTIME=disabled
 
 DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 LOG_FILE="$DIR/launcher.log"
+PYTHON_BIN="$DIR/.venv/bin/python"
 
-if [ -x "$DIR/.venv/bin/python" ]; then
-  PYTHON_BIN="$DIR/.venv/bin/python"
-else
-  PYTHON_BIN="python3"
+if [ ! -x "$PYTHON_BIN" ]; then
+  python3 -m venv "$DIR/.venv" >>"$LOG_FILE" 2>&1
+  "$PYTHON_BIN" -m pip install -q -r "$DIR/requirements.txt" >>"$LOG_FILE" 2>&1
 fi
 
 if ! nice -n 10 "$PYTHON_BIN" "$DIR/main.py" "$@" >>"$LOG_FILE" 2>&1; then

@@ -55,7 +55,7 @@ def sync_layouts(remote_url: str = REMOTE_LAYOUTS_URL, timeout: float = 2.0) -> 
         return active
 
     try:
-        req = urllib.request.Request(remote_url, headers={"User-Agent": "aniimo-sanctum-launcher/1.0"})
+        req = urllib.request.Request(remote_url, headers={"User-Agent": "aniimo-sanctum-finder/1.0"})
         with urllib.request.urlopen(req, timeout=timeout) as resp:
             remote_data = json.loads(resp.read().decode("utf-8"))
         if isinstance(remote_data, dict) and isinstance(remote_data.get("layouts"), dict):

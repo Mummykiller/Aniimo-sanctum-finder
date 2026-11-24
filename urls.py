@@ -6,7 +6,7 @@ from __future__ import annotations
 
 # Replace with your public GitHub raw URL once published:
 REMOTE_LAYOUTS_URL = (
-    "https://raw.githubusercontent.com/YOUR_USERNAME/aniimo-sanctum-launcher/main/layouts.json"
+    "https://raw.githubusercontent.com/Mummykiller/Aniimo-sanctum-finder/main/layouts.json"
 )
 
 BASE_SANCTUM_URL = "https://aniimotools.dev/map/lost-sanctum/"

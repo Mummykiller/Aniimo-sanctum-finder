@@ -1,4 +1,4 @@
-# Aniimo Sanctum Launcher
+# Aniimo Sanctum Finder
 
 A lightweight hotkey launcher for **Aniimo** that looks at your in-game Sanctum map and opens the matching layout page on `aniimotools.dev` in your default browser.
 
@@ -21,20 +21,20 @@ When you press your hotkey while viewing the in-game Sanctum map:
 
 ### Windows
 1. Install **Python 3.10+** from [python.org](https://www.python.org/downloads/) (check **"Add Python to PATH"** during install).
-2. Download or clone this repository, then open PowerShell inside the `aniimo-sanctum-launcher` folder:
-   ```powershell
-   python -m venv .venv
-   .venv\Scripts\python.exe -m pip install -r requirements.txt
-   ```
+2. Download or clone this repository and double-click **`install_windows.bat`** inside `aniimo-sanctum-finder`.
+   - It automatically creates `.venv`, installs the required packages, and creates an **Aniimo Sanctum Finder** shortcut on your Desktop.
+   - *(Alternatively, running `launch.bat` directly will also auto-setup `.venv` on first launch.)*
 
 ### Linux (KDE Plasma Wayland / X11)
 1. Ensure **Python 3.10+** is installed. On KDE Plasma Wayland, `spectacle` (installed by default on KDE) or `grim` is used for screen capture.
-2. Clone or download this repository, then run in a terminal inside `aniimo-sanctum-launcher`:
+2. Open a terminal and run these commands step by step:
    ```bash
-   python3 -m venv .venv
-   .venv/bin/python -m pip install -r requirements.txt
-   chmod +x launch.sh
+   git clone https://github.com/Mummykiller/Aniimo-sanctum-finder.git
+   cd Aniimo-sanctum-finder
+   chmod +x install_linux.sh
+   ./install_linux.sh
    ```
+   This sets up `.venv`, installs the required packages, marks `launch.sh` executable, and prints the exact path to paste into your KDE shortcut settings.
 
 ---
 
@@ -43,17 +43,17 @@ When you press your hotkey while viewing the in-game Sanctum map:
 Open the Sanctum map in-game so both the starting room and the blue door are visible, then press your configured hotkey:
 
 ### Windows
-1. Right-click your Desktop → **New → Shortcut**.
-2. Browse to `launch.bat` inside your `aniimo-sanctum-launcher` folder (or use `pythonw.exe C:\path\to\aniimo-sanctum-launcher\main.py`).
-3. Right-click the new shortcut → **Properties** → click **Shortcut key** and press your desired hotkey (for example, `Ctrl+Alt+M`) → **OK**.
+1. Right-click the **Aniimo Sanctum Finder** shortcut on your Desktop (created by `install_windows.bat`).
+2. Click **Properties** → click **Shortcut key** and press your desired hotkey (for example, `Ctrl+Alt+M`) → **OK**.
 
-### Linux (KDE Plasma Wayland)
-1. Open **System Settings → Keyboard → Shortcuts → Add New → Command or Script**.
-2. Set the command to the full path of `launch.sh`:
+### Linux (KDE Plasma Wayland / X11)
+1. Open **System Settings → Keyboard → Shortcuts → + Add New → Command or Script**.
+2. Set the command to the full path printed by `./install_linux.sh`:
    ```text
-   /path/to/aniimo-sanctum-launcher/launch.sh
+   /path/to/aniimo-sanctum-finder/launch.sh
    ```
-3. Select the entry, click **+ Add custom shortcut**, press your desired combo (for example, `Meta+M` or `Ctrl+Shift+X`), and click **Apply**.
+3. Click **Add**, select the new entry, click **+ Add custom shortcut**, press your desired key combination (for example, `Meta+M` or `Ctrl+Shift+X`), and click **Apply**.
+4. Click out of System Settings (onto your desktop or game), open the Sanctum map, and press your hotkey!
    *(If KDE Plasma 6 doesn't trigger a newly added shortcut right away, log out and back in so `kwin_wayland` reloads it.)*
 
 ### Optional Command-Line Flags
@@ -65,7 +65,7 @@ Open the Sanctum map in-game so both the starting room and the blue door are vis
 
 ## Bug Reports & Troubleshooting
 
-- Check `launcher.log` in the `aniimo-sanctum-launcher` folder for error messages or match confidence details.
+- Check `launcher.log` in the `aniimo-sanctum-finder` folder for error messages or match confidence details.
 - If a layout is misidentified, run:
   ```bash
   .venv/bin/python main.py --test-image /path/to/screenshot.png --calibrate --dry-run
