@@ -1,0 +1,14 @@
+# Virtual environment & caches
+.venv/
+.cache/
+__pycache__/
+*.py[cod]
+
+# Local-only developer reference images (never redistribute)
+local_reference_images/
+Images/
+
+# Logs & debug captures
+*.log
+calibrate_overlay.png
+last_capture*.png

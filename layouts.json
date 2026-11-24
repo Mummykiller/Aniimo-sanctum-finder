@@ -1,0 +1,281 @@
+{
+  "version": 9,
+  "layouts": {
+    "31": {
+      "normalized_distance": 4.1929,
+      "angle_deg": -143.324,
+      "size_ratio": 1.0,
+      "exits": [
+        0.0,
+        1.0,
+        0.0,
+        1.0
+      ],
+      "tier": "nightmare"
+    },
+    "32": {
+      "normalized_distance": 3.4867,
+      "angle_deg": -0.386,
+      "size_ratio": 1.0,
+      "exits": [
+        0.0,
+        1.0,
+        1.0,
+        1.0
+      ],
+      "tier": "nightmare"
+    },
+    "34": {
+      "normalized_distance": 4.6558,
+      "angle_deg": 70.803,
+      "size_ratio": 1.0,
+      "exits": [
+        0.0,
+        0.0,
+        1.0,
+        0.0
+      ],
+      "tier": "nightmare"
+    },
+    "35": {
+      "normalized_distance": 4.6656,
+      "angle_deg": -33.488,
+      "size_ratio": 1.0,
+      "exits": [
+        0.0,
+        1.0,
+        0.0,
+        0.0
+      ],
+      "tier": "nightmare"
+    },
+    "36": {
+      "normalized_distance": 5.6614,
+      "angle_deg": 159.092,
+      "size_ratio": 1.0,
+      "exits": [
+        1.0,
+        0.0,
+        1.0,
+        1.0
+      ],
+      "tier": "nightmare"
+    },
+    "37": {
+      "normalized_distance": 4.1927,
+      "angle_deg": 23.423,
+      "size_ratio": 1.0,
+      "exits": [
+        0.0,
+        0.0,
+        1.0,
+        0.0
+      ],
+      "tier": "nightmare"
+    },
+    "39": {
+      "normalized_distance": 4.5941,
+      "angle_deg": -80.253,
+      "size_ratio": 1.0,
+      "exits": [
+        0.0,
+        1.0,
+        1.0,
+        0.0
+      ],
+      "tier": "nightmare"
+    },
+    "40": {
+      "normalized_distance": 6.6751,
+      "angle_deg": -179.379,
+      "size_ratio": 1.0,
+      "exits": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "tier": "nightmare"
+    },
+    "41": {
+      "normalized_distance": 3.6199,
+      "angle_deg": 64.693,
+      "size_ratio": 1.0,
+      "exits": [
+        0.0,
+        1.0,
+        0.0,
+        0.0
+      ],
+      "tier": "hard"
+    },
+    "42": {
+      "normalized_distance": 2.97,
+      "angle_deg": 79.806,
+      "size_ratio": 1.0,
+      "exits": [
+        0.0,
+        0.0,
+        1.0,
+        0.0
+      ],
+      "tier": "hard"
+    },
+    "45": {
+      "normalized_distance": 2.1839,
+      "angle_deg": -75.208,
+      "size_ratio": 1.0,
+      "exits": [
+        0.0,
+        1.0,
+        0.0,
+        0.0
+      ],
+      "tier": "hard"
+    },
+    "48": {
+      "normalized_distance": 8.9667,
+      "angle_deg": -90.03,
+      "size_ratio": 1.0,
+      "exits": [
+        1.0,
+        0.0,
+        0.0,
+        0.0
+      ],
+      "tier": "hard"
+    },
+    "49": {
+      "normalized_distance": 8.7594,
+      "angle_deg": 89.969,
+      "size_ratio": 1.0,
+      "exits": [
+        0.0,
+        0.0,
+        1.0,
+        0.0
+      ],
+      "tier": "hard"
+    },
+    "50": {
+      "normalized_distance": 5.1406,
+      "angle_deg": -179.826,
+      "size_ratio": 1.0,
+      "exits": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "tier": "hard"
+    },
+    "53": {
+      "normalized_distance": 2.0227,
+      "angle_deg": -85.459,
+      "size_ratio": 1.0,
+      "exits": [
+        0.0,
+        0.0,
+        1.0,
+        0.0
+      ],
+      "tier": "beginner"
+    },
+    "54": {
+      "normalized_distance": 3.1009,
+      "angle_deg": 97.283,
+      "size_ratio": 1.0,
+      "exits": [
+        0.0,
+        0.0,
+        1.0,
+        0.0
+      ],
+      "tier": "beginner"
+    },
+    "55": {
+      "normalized_distance": 2.967,
+      "angle_deg": 24.674,
+      "size_ratio": 1.0,
+      "exits": [
+        0.0,
+        1.0,
+        1.0,
+        0.0
+      ],
+      "tier": "beginner"
+    },
+    "56": {
+      "normalized_distance": 1.5385,
+      "angle_deg": -0.663,
+      "size_ratio": 1.0,
+      "exits": [
+        0.0,
+        1.0,
+        0.0,
+        0.0
+      ],
+      "tier": "beginner"
+    },
+    "57": {
+      "normalized_distance": 1.9936,
+      "angle_deg": 94.385,
+      "size_ratio": 1.0,
+      "exits": [
+        0.0,
+        1.0,
+        0.0,
+        1.0
+      ],
+      "tier": "beginner"
+    },
+    "58": {
+      "normalized_distance": 2.3209,
+      "angle_deg": 0.368,
+      "size_ratio": 1.0,
+      "exits": [
+        1.0,
+        0.0,
+        0.0,
+        0.0
+      ],
+      "tier": "beginner"
+    },
+    "59": {
+      "normalized_distance": 4.7021,
+      "angle_deg": -48.443,
+      "size_ratio": 1.0,
+      "exits": [
+        1.0,
+        0.0,
+        0.0,
+        0.0
+      ],
+      "tier": "beginner"
+    },
+    "61": {
+      "normalized_distance": 3.0315,
+      "angle_deg": 119.358,
+      "size_ratio": 1.0,
+      "exits": [
+        0.0,
+        0.0,
+        1.0,
+        0.0
+      ],
+      "tier": "nightmare"
+    },
+    "62": {
+      "normalized_distance": 4.2095,
+      "angle_deg": -129.034,
+      "size_ratio": 1.0,
+      "exits": [
+        1.0,
+        1.0,
+        0.0,
+        1.0
+      ],
+      "tier": "nightmare"
+    }
+  }
+}
