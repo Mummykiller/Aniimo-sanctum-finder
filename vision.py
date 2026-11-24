@@ -17,8 +17,8 @@ import numpy as np
 
 # Default OpenCV HSV ranges (H: 0..179, S: 0..255, V: 0..255)
 DEFAULT_HSV_RANGES: dict[str, tuple[tuple[int, int, int], tuple[int, int, int]]] = {
-    # Orange/amber crowned main door (H >= 12 avoids red boxes; S <= 210 avoids bright yellow eggs)
-    "orange": ((12, 65, 130), (26, 210, 255)),
+    # Orange/amber crowned main door (H <= 21 avoids yellow player arrow; S <= 210 avoids bright yellow eggs)
+    "orange": ((12, 65, 130), (21, 210, 255)),
     # Fallback when player's bright yellow arrow stands directly on a door
     "yellow_fallback": ((22, 120, 180), (35, 255, 255)),
     # Blue side entrance door
@@ -40,6 +40,7 @@ class DoorSignature:
     room_center: tuple[float, float]
     room_size: float
     exits: tuple[float, float, float, float]
+    started_from: str = "orange"
 
     def to_dict(self) -> dict[str, Any]:
         return {
@@ -47,6 +48,7 @@ class DoorSignature:
             "angle_deg": round(self.angle_deg, 3),
             "size_ratio": round(self.size_ratio, 4),
             "exits": [round(v, 3) for v in self.exits],
+            "started_from": self.started_from,
         }
 
 
@@ -97,6 +99,7 @@ def _find_best_door_contour(
     max_area: float,
     exclude_center: tuple[float, float] | None = None,
     min_sep_px: float = 20.0,
+    min_solidity: float = 0.35,
 ) -> tuple[np.ndarray, tuple[float, float], float, tuple[int, int]] | None:
     """
     Find the most door-like contour by filtering pixel width/height, aspect ratio,
@@ -125,7 +128,7 @@ def _find_best_door_contour(
             continue
 
         solidity = area / float(bw * bh)
-        if solidity < 0.35:
+        if solidity < min_solidity:
             continue
 
         m = cv2.moments(cnt)
@@ -466,6 +469,7 @@ def detect_doors(
                 max_area=max_area,
                 exclude_center=blue_hit[1] if blue_hit is not None else None,
                 min_sep_px=min_sep,
+                min_solidity=0.22,
             )
             if orange_hit is not None:
                 used_yellow_for = "orange"
@@ -479,6 +483,7 @@ def detect_doors(
                 max_area=max_area,
                 exclude_center=orange_hit[1],
                 min_sep_px=min_sep,
+                min_solidity=0.22,
             )
             if blue_hit is not None:
                 used_yellow_for = "blue"
@@ -498,28 +503,36 @@ def detect_doors(
         _, (bx, by), b_area, (bw, bh) = blue_hit
 
         rx, ry, room_size, exits = measure_starting_room(roi, ox, oy, float(oh))
-        start_valid, start_corners = _validate_room_corners(floor_mask, rx, ry, room_size / 2.0)
+        start_corners_valid, start_corners = _validate_room_corners(floor_mask, rx, ry, room_size / 2.0)
+        orange_floor_surround = _has_floor_surround(floor_mask, ox, oy, radius=max(ow, oh) * 1.5)
+        start_valid = (
+            start_corners_valid
+            and room_size >= max(ow, oh) * 2.5
+            and orange_floor_surround >= 0.35
+        )
+
+        started_from = "orange"
+        target_x, target_y = bx, by
 
         blue_floor_surround = _has_floor_surround(floor_mask, bx, by, radius=max(bw, bh) * 1.5)
         if blue_floor_surround >= 0.35:
-            ex_rx, ex_ry, ex_room_size, _ = measure_starting_room(roi, bx, by, float(bh))
-            exit_valid, _ = _validate_room_corners(floor_mask, ex_rx, ex_ry, ex_room_size / 2.0)
+            ex_rx, ex_ry, ex_room_size, ex_exits = measure_starting_room(roi, bx, by, float(bh))
+            exit_corners_valid, ex_corners = _validate_room_corners(floor_mask, ex_rx, ex_ry, ex_room_size / 2.0)
+            exit_valid = exit_corners_valid and ex_room_size >= max(bw, bh) * 2.5
             exit_room_box = (ex_rx, ex_ry, ex_room_size)
             if not start_valid and exit_valid:
-                room_size = ex_room_size
-                half = room_size / 2.0
-                exits = tuple(
-                    float(np.mean(floor_mask[y0:y1, x0:x1])) if (x1 > x0 and y1 > y0) else 0.0
-                    for x0, y0, x1, y1 in _exit_probe_boxes(rx, ry, half, rw, rh)
-                )  # type: ignore[assignment]
+                started_from = "blue"
+                rx, ry, room_size, exits = ex_rx, ex_ry, ex_room_size, ex_exits
+                start_valid, start_corners = exit_valid, ex_corners
+                target_x, target_y = ox, oy
             elif start_valid and exit_valid and abs(ex_room_size - room_size) / max(room_size, 1e-6) <= 0.15:
                 room_size = (room_size + ex_room_size) / 2.0
             info["exit_room_size_px"] = round(ex_room_size, 1)
             info["exit_room_corner_valid"] = exit_valid
 
-        pixel_dist = math.hypot(bx - rx, by - ry)
+        pixel_dist = math.hypot(target_x - rx, target_y - ry)
         norm_dist = pixel_dist / max(room_size, 1e-6)
-        angle_deg = math.degrees(math.atan2(by - ry, bx - rx))
+        angle_deg = math.degrees(math.atan2(target_y - ry, target_x - rx))
         size_ratio = o_area / max(b_area, 1e-6)
 
         sig = DoorSignature(
@@ -535,8 +548,10 @@ def detect_doors(
             room_center=(rx, ry),
             room_size=room_size,
             exits=exits,
+            started_from=started_from,
         )
         info["signature"] = sig.to_dict()
+        info["started_from"] = started_from
         info["orange_size_px"] = (ow, oh)
         info["blue_size_px"] = (bw, bh)
         info["room_size_px"] = round(room_size, 1)
@@ -611,7 +626,7 @@ def detect_doors(
                 c_color = (255, 220, 0) if c_val < 0.20 else (255, 0, 255)
                 cv2.rectangle(overlay, (cx0, cy0), (cx1, cy1), c_color, 2)
 
-            if exit_room_box is not None:
+            if exit_room_box is not None and sig.started_from != "blue":
                 erx, ery, ersz = exit_room_box
                 ehalf = ersz / 2.0
                 cv2.rectangle(
@@ -623,7 +638,8 @@ def detect_doors(
                 )
 
             p1 = (int(round(rx)), int(round(ry)))
-            p2 = (int(round(sig.blue_centroid[0])), int(round(sig.blue_centroid[1])))
+            target_pt = sig.orange_centroid if sig.started_from == "blue" else sig.blue_centroid
+            p2 = (int(round(target_pt[0])), int(round(target_pt[1])))
             cv2.line(overlay, p1, p2, (0, 255, 128), 2)
             exits_txt = ",".join(f"{v:.2f}" for v in sig.exits)
             label = (

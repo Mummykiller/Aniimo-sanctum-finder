@@ -93,6 +93,23 @@ def match_layout(
     Includes a 180-degree swapped-door fail-safe if the primary pass fails.
     """
     entries: dict[str, Any] = layouts_db.get("layouts", {})
+    if sig.started_from == "blue":
+        # Player spawned in the blue side-entrance room; orange main room is in fog.
+        # Reverse vector (blue -> orange becomes orange -> blue) and ignore unrevealed orange exits.
+        total_w = max(w_angle + w_distance, 1e-6)
+        candidates = _score_against_entries(
+            sig.angle_deg + 180.0,
+            sig.normalized_distance,
+            sig.exits,
+            entries,
+            w_angle=w_angle / total_w,
+            w_distance=w_distance / total_w,
+            w_exits=0.0,
+        )
+        if candidates and candidates[0].confidence >= min_confidence:
+            return candidates[0], candidates
+        return None, candidates
+
     candidates = _score_against_entries(
         sig.angle_deg,
         sig.normalized_distance,

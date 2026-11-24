@@ -1,81 +1,83 @@
 # Aniimo Sanctum Finder
 
-A lightweight hotkey launcher for **Aniimo** that looks at your in-game Sanctum map and opens the matching layout page on `aniimotools.dev` in your default browser.
+A lightweight hotkey launcher for **Aniimo** that snapshots your in-game Sanctum map and opens the matching layout on `aniimotools.dev` in your default browser.
+
+> **Safety:** Never reads game memory, never modifies game files, and never injects inputs into the game.
 
 ---
 
-## How It Works (Plain English)
+## How It Works
 
-When you press your hotkey while viewing the in-game Sanctum map:
-
-1. **Takes a quick snapshot of your main monitor only** (ignoring any second monitor).
-2. **Finds the two doors:** It looks for the **orange** Main entrance door (or your yellow player arrow if you're standing on it) and the **blue** Side entrance door.
-3. **Measures the starting room:** Using the starting room's dark outer walls as a ruler, it measures how far apart the two doors are, what direction the blue door is from the starting room, and which hallways (`North`, `East`, `South`, `West`) leave the starting room.
-4. **Matches & opens the browser:** It compares those numbers against the lightweight `layouts.json` database and opens `https://aniimotools.dev/map/lost-sanctum/#plan-<id>` in your browser. If you press the hotkey outside the map screen, it exits quietly without opening anything.
-
-> **Safety & Transparency:** This tool **never** reads game memory, **never** modifies game files, and **never** sends or injects inputs into the game.
+1. **Captures your primary monitor** (ignoring secondary monitors).
+2. **Finds both doors:** Detects the **orange** Main entrance and **blue** Side entrance doors, automatically handling either starting room (orange or blue).
+3. **Built-in fallbacks:**
+   - **Player arrow anchor:** If your yellow player arrow is standing on top of a door and hides it, the finder uses the arrow as a fallback anchor and shows a warning notification that the match may be less accurate.
+   - **Edge retry:** If a door is near the edge of the screen and clipped by the default 5% border trim, it automatically retries with no margin trim.
+4. **Matches & notifies:** Compares door distance, angle, and starting-room exits against `layouts.json` and opens `https://aniimotools.dev/map/lost-sanctum/#plan-<id>`.
+   - **Clean match (90%+):** Opens the map silently.
+   - **Uncertain / partial capture:** Sends a native desktop notification if confidence is below `90%`, if the player-arrow fallback was used, or if only one door is visible (so you know to zoom out). If you press the hotkey outside the map screen, it exits quietly.
 
 ---
 
-## Installation
+## Setup & Usage (Windows / Linux)
 
-### Windows
-1. Install **Python 3.10+** from [python.org](https://www.python.org/downloads/) (check **"Add Python to PATH"** during install).
+<details>
+<summary><strong>Windows</strong> (Install, Hotkey & Notifications)</summary>
+
+1. Install **Python 3.10+** from [python.org](https://www.python.org/downloads/) (check **"Add Python to PATH"**).
 2. Download or clone this repository and double-click **`install_windows.bat`** inside `aniimo-sanctum-finder`.
-   - It automatically creates `.venv`, installs the required packages, and creates an **Aniimo Sanctum Finder** shortcut on your Desktop.
-   - *(Alternatively, running `launch.bat` directly will also auto-setup `.venv` on first launch.)*
+   - Creates `.venv`, installs dependencies, and places an **Aniimo Sanctum Finder** shortcut on your Desktop.
+   - *(Running `launch.bat` directly also auto-sets up `.venv` on first launch.)*
+3. **Bind a hotkey:**
+   - Right-click **Aniimo Sanctum Finder** on your Desktop → **Properties** → **Shortcut key** → press your hotkey (e.g. `Ctrl+Alt+M`) → **OK**.
+4. **Use it:** Open the Sanctum map in-game so both doors are visible and press your hotkey.
+5. **Notifications:** Uses built-in Windows PowerShell Toast / tray notifications (no extra setup required).
 
-### Linux (KDE Plasma Wayland / X11)
-1. Ensure **Python 3.10+** is installed. On KDE Plasma Wayland, `spectacle` (installed by default on KDE) or `grim` is used for screen capture.
-2. Open a terminal and run these commands step by step:
+</details>
+
+<details>
+<summary><strong>Linux</strong> (Install, Hotkey & Notifications)</summary>
+
+1. Ensure **Python 3.10+** is installed. On KDE Plasma Wayland, `spectacle` (default on KDE) or `grim` is used for screen capture.
+2. Run the installer:
    ```bash
    git clone https://github.com/Mummykiller/Aniimo-sanctum-finder.git
    cd Aniimo-sanctum-finder
    chmod +x install_linux.sh
    ./install_linux.sh
    ```
-   This sets up `.venv`, installs the required packages, marks `launch.sh` executable, and prints the exact path to paste into your KDE shortcut settings.
+   This creates `.venv`, installs dependencies, marks `launch.sh` executable, and prints the exact path for your shortcut.
+3. **Bind a hotkey (KDE Plasma Wayland / X11):**
+   - Open **System Settings → Keyboard → Shortcuts → + Add New → Command or Script**.
+   - Paste `/path/to/aniimo-sanctum-finder/launch.sh`.
+   - Click **Add**, assign your shortcut (e.g. `Meta+M` or `Ctrl+Shift+X`), and click **Apply**.
+   - *(On KDE Plasma 6, log out and back in if `kwin_wayland` doesn't pick up a new shortcut immediately.)*
+4. **Use it:** Open the Sanctum map in-game so both doors are visible and press your hotkey.
+5. **Notifications:** Uses `notify-send` (with `kdialog` / `zenity` fallbacks) for low-confidence or partial-door warnings.
+
+</details>
 
 ---
 
-## How to Use
+## CLI Flags & Troubleshooting
 
-Open the Sanctum map in-game so both the starting room and the blue door are visible, then press your configured hotkey:
+* `--dry-run`: Prints top 3 candidates and URL without opening the browser or sending desktop notifications.
+* `--calibrate`: Saves `calibrate_overlay.png` with detected doors, room box, and exit probes.
+* `--test-image <path>`: Runs detection and matching on a saved screenshot.
+* `--no-notify`: Disables desktop notifications.
+* `--no-sync`: Skips checking GitHub for `layouts.json` updates.
+* `--min-confidence <0..1>`: Sets the minimum match threshold to open a URL (default `0.65`).
 
-### Windows
-1. Right-click the **Aniimo Sanctum Finder** shortcut on your Desktop (created by `install_windows.bat`).
-2. Click **Properties** → click **Shortcut key** and press your desired hotkey (for example, `Ctrl+Alt+M`) → **OK**.
-
-### Linux (KDE Plasma Wayland / X11)
-1. Open **System Settings → Keyboard → Shortcuts → + Add New → Command or Script**.
-2. Set the command to the full path printed by `./install_linux.sh`:
-   ```text
-   /path/to/aniimo-sanctum-finder/launch.sh
-   ```
-3. Click **Add**, select the new entry, click **+ Add custom shortcut**, press your desired key combination (for example, `Meta+M` or `Ctrl+Shift+X`), and click **Apply**.
-4. Click out of System Settings (onto your desktop or game), open the Sanctum map, and press your hotkey!
-   *(If KDE Plasma 6 doesn't trigger a newly added shortcut right away, log out and back in so `kwin_wayland` reloads it.)*
-
-### Optional Command-Line Flags
-- `--dry-run`: Prints the top 3 matched layouts and URL without opening your browser.
-- `--calibrate`: Saves `calibrate_overlay.png` showing the detected doors, starting room square, corner checks, and hallway probes.
-- `--test-image path/to/screenshot.png`: Tests detection against a saved screenshot file.
-
----
-
-## Bug Reports & Troubleshooting
-
-- Check `launcher.log` in the `aniimo-sanctum-finder` folder for error messages or match confidence details.
-- If a layout is misidentified, run:
-  ```bash
-  .venv/bin/python main.py --test-image /path/to/screenshot.png --calibrate --dry-run
-  ```
-  and open a GitHub Issue with the layout number, `launcher.log` output, and `calibrate_overlay.png` (or a cropped screenshot of the map).
+If a layout is misidentified, check `launcher.log` or run:
+```bash
+.venv/bin/python main.py --test-image /path/to/screenshot.png --calibrate --dry-run
+```
+and open a GitHub Issue with the layout number, `launcher.log` output, and `calibrate_overlay.png`.
 
 ---
 
 ## License & Notices
 
-- **License:** [MIT License](LICENSE)
-- **AI-Assisted Disclosure & Non-Affiliation:** Created with AI assistance as a lightweight launcher for an external companion website (`aniimotools.dev`) that I do not own or operate. Not affiliated with or endorsed by that website or Pawprint Interactive.
-- `©Pawprint Interactive Entertainment Pte. Ltd., fan-made, not official.`
+* **License:** [MIT License](LICENSE)
+* **AI-Assisted Disclosure & Non-Affiliation:** Created with AI assistance as a lightweight launcher for `aniimotools.dev`, which I do not own or operate. Not affiliated with or endorsed by that website or Pawprint Interactive.
+* `©Pawprint Interactive Entertainment Pte. Ltd., fan-made, not official.`

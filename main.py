@@ -33,6 +33,7 @@ import cv2
 
 from capture import capture_primary_monitor
 from matcher import match_layout
+from notify import APP_NAME, send_notification
 from sync import sync_layouts
 from urls import get_url_for_layout
 from vision import detect_doors
@@ -92,6 +93,11 @@ def main() -> int:
         default=0.65,
         help="Minimum match confidence [0..1] required to open a URL (default: 0.65)",
     )
+    parser.add_argument(
+        "--no-notify",
+        action="store_true",
+        help="Disable desktop notifications for low-confidence or partial-door captures",
+    )
     args = parser.parse_args()
 
     layouts_db = (
@@ -110,7 +116,18 @@ def main() -> int:
         image_bgr = capture_primary_monitor()
         trim = 0.05
 
+    def maybe_notify(message: str) -> None:
+        print(f"[notify] {message}")
+        if not args.dry_run and not args.no_notify:
+            send_notification(APP_NAME, message)
+
     sig, overlay, info = detect_doors(image_bgr, trim_margin=trim, return_debug=args.calibrate)
+    if sig is None and trim > 0.0:
+        retry_sig, retry_overlay, retry_info = detect_doors(
+            image_bgr, trim_margin=0.0, return_debug=args.calibrate
+        )
+        if retry_sig is not None:
+            sig, overlay, info = retry_sig, retry_overlay, retry_info
 
     if args.calibrate:
         out_overlay = BASE_DIR / "calibrate_overlay.png"
@@ -124,6 +141,12 @@ def main() -> int:
             "[info] Both orange and blue Sanctum doors were not detected on screen "
             f"(orange={info['orange_found']}, blue={info['blue_found']}). Exiting safely."
         )
+        if info["orange_found"] != info["blue_found"]:
+            missing = "blue" if info["orange_found"] else "orange"
+            maybe_notify(
+                f"Only one Sanctum door was detected ({missing} door not visible). "
+                "Zoom out or center the map so both doors are clearly visible."
+            )
         return 0
 
     best, candidates = match_layout(sig, layouts_db, min_confidence=args.min_confidence)
@@ -136,15 +159,38 @@ def main() -> int:
         print(f"[match] Top candidates -> {preview}")
 
     if best is None:
+        top_conf = candidates[0].confidence if candidates else 0.0
         print(
             f"[info] No layout met confidence threshold ({args.min_confidence:.2f}). Exiting safely."
         )
+        if info.get("used_yellow_fallback"):
+            maybe_notify(
+                f"Low match confidence ({top_conf:.0%}) using player arrow fallback. "
+                "Move off the door or zoom out so both doors are clearly visible."
+            )
+        else:
+            maybe_notify(
+                f"Low match confidence ({top_conf:.0%}). "
+                "Open the full Sanctum map with both doors clearly visible and try again."
+            )
         return 0
 
     target_url = get_url_for_layout(best.layout_id)
     if not target_url:
         print(f"[warn] No URL configured for layout {best.layout_id} in urls.py.")
         return 1
+
+    if info.get("used_yellow_fallback"):
+        door_side = info["used_yellow_fallback"]
+        maybe_notify(
+            f"Matched Map {best.layout_id} ({best.confidence:.0%}) — might not be accurate, "
+            f"using player arrow as {door_side} door fallback."
+        )
+    elif best.confidence < 0.90:
+        maybe_notify(
+            f"Matched Map {best.layout_id} ({best.confidence:.0%} confidence, below 90%). "
+            "Zoom out or ensure both doors and room exits are clearly visible."
+        )
 
     print(f"[launch] Map {best.layout_id} (confidence={best.confidence:.3f}) -> {target_url}")
     if not args.dry_run:
