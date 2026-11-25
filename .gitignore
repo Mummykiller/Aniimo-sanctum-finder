@@ -12,3 +12,6 @@ Images/
 *.log*
 calibrate_overlay.png
 last_capture*.png
+
+# Local release archives (upload to GitHub Releases instead)
+*.zip
