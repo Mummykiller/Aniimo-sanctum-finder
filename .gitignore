@@ -9,6 +9,6 @@ local_reference_images/
 Images/
 
 # Logs & debug captures
-*.log
+*.log*
 calibrate_overlay.png
 last_capture*.png

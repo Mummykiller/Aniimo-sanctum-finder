@@ -8,7 +8,7 @@ echo  Aniimo Sanctum Finder - Windows Installer
 echo ============================================
 echo.
 
-where python >nul 2>nul
+python --version >nul 2>nul
 if errorlevel 1 (
     echo [ERROR] Python is not installed or not in PATH.
     echo Please install Python 3.10+ from https://www.python.org/downloads/
@@ -21,6 +21,7 @@ if not exist "%DIR%.venv\Scripts\python.exe" (
     echo [1/3] Creating virtual environment in .venv...
     python -m venv "%DIR%.venv"
     if errorlevel 1 (
+        rmdir /s /q "%DIR%.venv" 2>nul
         echo [ERROR] Failed to create virtual environment.
         pause
         exit /b 1
@@ -36,9 +37,15 @@ if errorlevel 1 (
     pause
     exit /b 1
 )
+type nul > "%DIR%.venv\.deps_installed"
 
 echo [3/3] Creating Desktop shortcut...
-powershell -NoProfile -Command "$ws = New-Object -ComObject WScript.Shell; $sc = $ws.CreateShortcut([Environment]::GetFolderPath('Desktop') + '\Aniimo Sanctum Finder.lnk'); $sc.TargetPath = '%DIR%launch.bat'; $sc.WorkingDirectory = '%DIR%'; $sc.WindowStyle = 7; $sc.Description = 'Aniimo Sanctum Finder'; $sc.Save()"
+powershell -NoProfile -Command "$ws = New-Object -ComObject WScript.Shell; $sc = $ws.CreateShortcut((Join-Path ([Environment]::GetFolderPath('Desktop')) 'Aniimo Sanctum Finder.lnk')); $sc.TargetPath = Join-Path $env:DIR 'launch.bat'; $sc.WorkingDirectory = $env:DIR; $sc.WindowStyle = 7; $sc.Description = 'Aniimo Sanctum Finder'; $sc.Save()"
+if errorlevel 1 (
+    echo [ERROR] Failed to create Desktop shortcut.
+    pause
+    exit /b 1
+)
 
 echo.
 echo ============================================

@@ -17,8 +17,8 @@ import sys
 import tempfile
 from pathlib import Path
 
+import cv2
 import numpy as np
-from PIL import Image
 
 
 def is_wayland_session() -> bool:
@@ -29,8 +29,12 @@ def is_wayland_session() -> bool:
     return session_type == "wayland" or bool(os.environ.get("WAYLAND_DISPLAY"))
 
 
-def _get_kde_primary_monitor_rect() -> tuple[int, int, int, int] | None:
-    """Query kscreen-doctor for the primary (priority 1) monitor geometry."""
+def _get_kde_primary_monitor_geometry() -> tuple[tuple[int, int, int, int], tuple[int, int]] | None:
+    """
+    Query kscreen-doctor for enabled outputs and return:
+      ((rel_x, rel_y, w, h), (desktop_w, desktop_h))
+    in logical coordinates shifted so the virtual desktop origin is (0, 0).
+    """
     kscreen = shutil.which("kscreen-doctor")
     if not kscreen:
         return None
@@ -45,10 +49,10 @@ def _get_kde_primary_monitor_rect() -> tuple[int, int, int, int] | None:
         )
         clean = re.sub(r"\x1b\[[0-9;]*m", "", proc.stdout)
         blocks = re.split(r"(?=Output:\s+\d+)", clean)
-        fallback_rect: tuple[int, int, int, int] | None = None
+        outputs: list[tuple[int, int, int, int, bool]] = []
 
         for blk in blocks:
-            if "enabled" not in blk:
+            if not re.search(r"^\s*enabled\b", blk, re.MULTILINE):
                 continue
             geom_m = re.search(r"Geometry:\s*(-?\d+),(-?\d+)\s+(\d+)x(\d+)", blk)
             if not geom_m:
@@ -59,11 +63,26 @@ def _get_kde_primary_monitor_rect() -> tuple[int, int, int, int] | None:
                 int(geom_m.group(3)),
                 int(geom_m.group(4)),
             )
-            if fallback_rect is None:
-                fallback_rect = (x, y, w, h)
-            if re.search(r"priority\s+1\b", blk):
-                return (x, y, w, h)
-        return fallback_rect
+            if w <= 0 or h <= 0:
+                continue
+            is_primary = bool(re.search(r"\bpriority\s+1\b", blk))
+            outputs.append((x, y, w, h, is_primary))
+
+        if not outputs:
+            return None
+
+        min_x = min(o[0] for o in outputs)
+        min_y = min(o[1] for o in outputs)
+        max_x = max(o[0] + o[2] for o in outputs)
+        max_y = max(o[1] + o[3] for o in outputs)
+        desktop_w = max_x - min_x
+        desktop_h = max_y - min_y
+        if desktop_w <= 0 or desktop_h <= 0:
+            return None
+
+        primary = next((o for o in outputs if o[4]), outputs[0])
+        px, py, pw, ph, _ = primary
+        return (px - min_x, py - min_y, pw, ph), (desktop_w, desktop_h)
     except Exception:
         return None
 
@@ -73,29 +92,36 @@ def _capture_mss_primary() -> np.ndarray:
     import mss
 
     with mss.mss() as sct:
-        # sct.monitors[0] is the virtual desktop; sct.monitors[1] is primary.
-        monitor = sct.monitors[1] if len(sct.monitors) > 1 else sct.monitors[0]
+        if not sct.monitors:
+            raise RuntimeError("No monitors reported by mss.")
+        if len(sct.monitors) > 1:
+            # Prefer the OS primary monitor at virtual origin (0, 0), else monitors[1].
+            monitor = next(
+                (m for m in sct.monitors[1:] if m.get("left") == 0 and m.get("top") == 0),
+                sct.monitors[1],
+            )
+        else:
+            monitor = sct.monitors[0]
         raw = sct.grab(monitor)
-        rgb = Image.frombytes("RGB", raw.size, raw.bgra, "raw", "BGRX")
-        return np.asarray(rgb)[:, :, ::-1].copy()
+        bgra = np.frombuffer(raw.bgra, dtype=np.uint8).reshape(raw.height, raw.width, 4)
+        return cv2.cvtColor(bgra, cv2.COLOR_BGRA2BGR)
 
 
 def _capture_wayland_primary() -> np.ndarray:
     """Capture the primary monitor on Linux Wayland via spectacle or grim."""
-    fd, tmp_name = tempfile.mkstemp(prefix="aniimo_cap_", suffix=".png")
-    os.close(fd)
-    tmp_path = Path(tmp_name)
+    spectacle = shutil.which("spectacle")
+    grim = shutil.which("grim")
+    if not spectacle and not grim:
+        raise RuntimeError(
+            "Wayland session detected, but neither 'spectacle' (KDE) nor 'grim' is installed."
+        )
 
-    try:
-        spectacle = shutil.which("spectacle")
-        grim = shutil.which("grim")
-        primary_rect = _get_kde_primary_monitor_rect()
+    is_kde = "kde" in os.environ.get("XDG_CURRENT_DESKTOP", "").lower()
+    use_spectacle_first = bool(spectacle) and (is_kde or not grim)
+    kde_geom = _get_kde_primary_monitor_geometry() if (is_kde or spectacle) else None
 
-        if spectacle:
-            if primary_rect is not None:
-                cmd = [spectacle, "-b", "-n", "-f", "-o", str(tmp_path)]
-            else:
-                cmd = [spectacle, "-b", "-n", "-m", "-o", str(tmp_path)]
+    def _run_capture_tool(tool_name: str, cmd: list[str], out_path: Path) -> None:
+        try:
             subprocess.run(
                 cmd,
                 check=True,
@@ -103,35 +129,72 @@ def _capture_wayland_primary() -> np.ndarray:
                 stdout=subprocess.DEVNULL,
                 stderr=subprocess.PIPE,
             )
-        elif grim:
-            subprocess.run(
-                [grim, str(tmp_path)],
-                check=True,
-                timeout=10,
-                stdout=subprocess.DEVNULL,
-                stderr=subprocess.PIPE,
-            )
+        except subprocess.CalledProcessError as exc:
+            err = exc.stderr.decode(errors="replace").strip() if exc.stderr else str(exc)
+            raise RuntimeError(f"{tool_name} failed: {err}") from exc
+        if not out_path.exists() or out_path.stat().st_size == 0:
+            raise RuntimeError(f"{tool_name} produced an empty file.")
+
+    tmp_paths: list[Path] = []
+    try:
+        captured_path: Path | None = None
+        last_err: Exception | None = None
+
+        tools_to_try = []
+        if use_spectacle_first and spectacle:
+            tools_to_try.append("spectacle")
+            if grim:
+                tools_to_try.append("grim")
         else:
-            raise RuntimeError(
-                "Wayland session detected, but neither 'spectacle' (KDE) nor 'grim' is installed."
-            )
+            if grim:
+                tools_to_try.append("grim")
+            if spectacle:
+                tools_to_try.append("spectacle")
 
-        if not tmp_path.exists() or tmp_path.stat().st_size == 0:
-            raise RuntimeError("Wayland screenshot command produced an empty file.")
+        for tool in tools_to_try:
+            suffix = ".png" if tool == "spectacle" else ".ppm"
+            fd, tmp_name = tempfile.mkstemp(prefix="aniimo_cap_", suffix=suffix)
+            os.close(fd)
+            tmp_path = Path(tmp_name)
+            tmp_paths.append(tmp_path)
+            if tool == "spectacle":
+                flag = "-f" if kde_geom is not None else "-m"
+                cmd = [spectacle, "-b", "-n", flag, "-o", str(tmp_path)]
+            else:
+                cmd = [grim, "-t", "ppm", str(tmp_path)]
+            try:
+                _run_capture_tool(tool, cmd, tmp_path)
+                captured_path = tmp_path
+                break
+            except Exception as exc:
+                last_err = exc
 
-        with Image.open(tmp_path) as img:
-            rgb = img.convert("RGB")
-            if primary_rect is not None:
-                px, py, pw, ph = primary_rect
-                iw, ih = rgb.size
-                if px >= 0 and py >= 0 and px + pw <= iw and py + ph <= ih:
-                    rgb = rgb.crop((px, py, px + pw, py + ph))
-            return np.asarray(rgb)[:, :, ::-1].copy()
+        if captured_path is None:
+            raise RuntimeError(f"Wayland screenshot capture failed: {last_err}")
+
+        bgr = cv2.imread(str(captured_path), cv2.IMREAD_COLOR)
+        if bgr is None:
+            raise RuntimeError("Failed to decode Wayland screenshot image.")
+
+        if kde_geom is not None:
+            (px, py, pw, ph), (desktop_w, desktop_h) = kde_geom
+            ih, iw = bgr.shape[:2]
+            # Map logical coordinates to physical image pixels (handles HiDPI / fractional scaling).
+            sx = iw / float(desktop_w)
+            sy = ih / float(desktop_h)
+            x0 = max(0, int(round(px * sx)))
+            y0 = max(0, int(round(py * sy)))
+            x1 = min(iw, int(round((px + pw) * sx)))
+            y1 = min(ih, int(round((py + ph) * sy)))
+            if x1 > x0 and y1 > y0 and (x0 > 0 or y0 > 0 or x1 < iw or y1 < ih):
+                return np.ascontiguousarray(bgr[y0:y1, x0:x1])
+        return bgr
     finally:
-        try:
-            tmp_path.unlink(missing_ok=True)
-        except Exception:
-            pass
+        for p in tmp_paths:
+            try:
+                p.unlink(missing_ok=True)
+            except Exception:
+                pass
 
 
 def capture_primary_monitor() -> np.ndarray:

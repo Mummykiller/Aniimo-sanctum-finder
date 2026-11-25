@@ -6,6 +6,7 @@ and hallway exit profiles against layouts.json.
 from __future__ import annotations
 
 from dataclasses import dataclass
+import math
 from typing import Any
 
 from vision import DoorSignature
@@ -40,11 +41,15 @@ def _score_against_entries(
     candidates: list[MatchResult] = []
 
     for key, ref in entries.items():
+        if not isinstance(ref, dict):
+            continue
         try:
             layout_id = int(key)
             ref_ang = float(ref["angle_deg"])
             ref_dist = float(ref["normalized_distance"])
         except (KeyError, TypeError, ValueError):
+            continue
+        if not (math.isfinite(ref_ang) and math.isfinite(ref_dist) and ref_dist > 0.0):
             continue
 
         ang_diff = shortest_angle_diff_deg(angle_deg, ref_ang)
@@ -52,15 +57,27 @@ def _score_against_entries(
         dist_err = min(1.0, abs(norm_dist - ref_dist) / max(ref_dist, 1e-6))
 
         ref_exits = ref.get("exits")
+        eff_w_angle, eff_w_dist, eff_w_exits = w_angle, w_distance, w_exits
+        exits_err = 0.0
+        has_valid_exits = False
         if isinstance(ref_exits, list) and len(ref_exits) == 4:
-            exits_err = sum(abs(float(a) - float(b)) for a, b in zip(exits, ref_exits)) / 4.0
-        else:
-            exits_err = 0.0
+            try:
+                parsed_exits = [float(b) for b in ref_exits]
+                if all(math.isfinite(b) for b in parsed_exits):
+                    exits_err = sum(abs(float(a) - b) for a, b in zip(exits, parsed_exits)) / 4.0
+                    has_valid_exits = True
+            except (TypeError, ValueError):
+                pass
+        if not has_valid_exits and w_exits > 0.0:
+            total_w = max(w_angle + w_distance, 1e-6)
+            eff_w_angle = w_angle / total_w
+            eff_w_dist = w_distance / total_w
+            eff_w_exits = 0.0
 
         weighted_err = (
-            w_angle * ang_err
-            + w_distance * dist_err
-            + w_exits * exits_err
+            eff_w_angle * ang_err
+            + eff_w_dist * dist_err
+            + eff_w_exits * exits_err
         )
         confidence = max(0.0, (1.0 - weighted_err) * penalty_scale)
 
@@ -92,7 +109,9 @@ def match_layout(
     Compare a detected DoorSignature against all layouts in layouts_db.
     Includes a 180-degree swapped-door fail-safe if the primary pass fails.
     """
-    entries: dict[str, Any] = layouts_db.get("layouts", {})
+    entries = layouts_db.get("layouts")
+    if not isinstance(entries, dict):
+        return None, []
     if sig.started_from == "blue":
         # Player spawned in the blue side-entrance room; orange main room is in fog.
         # Reverse vector (blue -> orange becomes orange -> blue) and ignore unrevealed orange exits.

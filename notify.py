@@ -68,15 +68,20 @@ def send_notification(title: str, message: str) -> bool:
             return res.returncode == 0
 
         if sys.platform.startswith("linux") or os.name == "posix":
+            if not any(
+                os.environ.get(v) for v in ("DISPLAY", "WAYLAND_DISPLAY", "DBUS_SESSION_BUS_ADDRESS")
+            ):
+                return False
             if notify_send := shutil.which("notify-send"):
                 res = subprocess.run(
-                    [notify_send, "-a", APP_NAME, "-i", "dialog-warning", title, message],
+                    [notify_send, "-a", APP_NAME, "-i", "dialog-warning", "-t", "5000", "--", title, message],
                     stdout=subprocess.DEVNULL,
                     stderr=subprocess.DEVNULL,
                     timeout=3,
                     check=False,
                 )
-                return res.returncode == 0
+                if res.returncode == 0:
+                    return True
             if kdialog := shutil.which("kdialog"):
                 res = subprocess.run(
                     [kdialog, "--passivepopup", message, "5", "--title", title],
@@ -85,7 +90,8 @@ def send_notification(title: str, message: str) -> bool:
                     timeout=3,
                     check=False,
                 )
-                return res.returncode == 0
+                if res.returncode == 0:
+                    return True
             if zenity := shutil.which("zenity"):
                 res = subprocess.run(
                     [zenity, "--notification", f"--text={title}: {message}"],

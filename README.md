@@ -25,7 +25,7 @@ A lightweight hotkey launcher for **Aniimo** that snapshots your in-game Sanctum
 <summary><strong>Windows</strong> (Install, Hotkey & Notifications)</summary>
 
 1. Install **Python 3.10+** from [python.org](https://www.python.org/downloads/) (check **"Add Python to PATH"**).
-2. Download or clone this repository and double-click **`install_windows.bat`** inside `aniimo-sanctum-finder`.
+2. Download or clone this repository and double-click **`install_windows.bat`** inside `Aniimo-sanctum-finder`.
    - Creates `.venv`, installs dependencies, and places an **Aniimo Sanctum Finder** shortcut on your Desktop.
    - *(Running `launch.bat` directly also auto-sets up `.venv` on first launch.)*
 3. **Bind a hotkey:**
@@ -49,7 +49,7 @@ A lightweight hotkey launcher for **Aniimo** that snapshots your in-game Sanctum
    This creates `.venv`, installs dependencies, marks `launch.sh` executable, and prints the exact path for your shortcut.
 3. **Bind a hotkey (KDE Plasma Wayland / X11):**
    - Open **System Settings → Keyboard → Shortcuts → + Add New → Command or Script**.
-   - Paste `/path/to/aniimo-sanctum-finder/launch.sh`.
+   - Paste `/path/to/Aniimo-sanctum-finder/launch.sh`.
    - Click **Add**, assign your shortcut (e.g. `Meta+M` or `Ctrl+Shift+X`), and click **Apply**.
    - *(On KDE Plasma 6, log out and back in if `kwin_wayland` doesn't pick up a new shortcut immediately.)*
 4. **Use it:** Open the Sanctum map in-game so both doors are visible and press your hotkey.
@@ -70,7 +70,11 @@ A lightweight hotkey launcher for **Aniimo** that snapshots your in-game Sanctum
 
 If a layout is misidentified, check `launcher.log` or run:
 ```bash
+# Linux
 .venv/bin/python main.py --test-image /path/to/screenshot.png --calibrate --dry-run
+
+# Windows
+.venv\Scripts\python.exe main.py --test-image C:\path\to\screenshot.png --calibrate --dry-run
 ```
 and open a GitHub Issue with the layout number, `launcher.log` output, and `calibrate_overlay.png`.
 

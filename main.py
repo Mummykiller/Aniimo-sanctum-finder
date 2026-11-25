@@ -25,6 +25,7 @@ for _env_key, _env_val in (
 
 import argparse
 import ctypes
+import math
 import sys
 import webbrowser
 from pathlib import Path
@@ -51,7 +52,9 @@ def _set_low_cpu_priority() -> None:
 
     if os.name == "posix":
         try:
-            os.nice(10)
+            cur_nice = os.nice(0)
+            if cur_nice < 10:
+                os.nice(10 - cur_nice)
         except Exception:
             pass
     elif sys.platform.startswith("win"):
@@ -99,13 +102,15 @@ def main() -> int:
         help="Disable desktop notifications for low-confidence or partial-door captures",
     )
     args = parser.parse_args()
+    if not (math.isfinite(args.min_confidence) and 0.0 <= args.min_confidence <= 1.0):
+        parser.error("--min-confidence must be a finite number between 0.0 and 1.0")
 
-    layouts_db = (
-        sync_layouts()
-        if not args.no_sync
-        else sync_layouts(remote_url="")
-    )
+    def maybe_notify(message: str) -> None:
+        print(f"[notify] {message}")
+        if not args.dry_run and not args.no_notify:
+            send_notification(APP_NAME, message)
 
+    # Capture screen BEFORE remote sync so slow/offline DNS never delays capturing the map.
     if args.test_image is not None:
         image_bgr = cv2.imread(str(args.test_image))
         if image_bgr is None:
@@ -113,27 +118,28 @@ def main() -> int:
             return 1
         trim = 0.0
     else:
-        image_bgr = capture_primary_monitor()
+        try:
+            image_bgr = capture_primary_monitor()
+        except Exception as exc:
+            print(f"[error] Screen capture failed: {exc}", file=sys.stderr)
+            maybe_notify(f"Screen capture failed: {exc}")
+            return 1
         trim = 0.05
 
-    def maybe_notify(message: str) -> None:
-        print(f"[notify] {message}")
-        if not args.dry_run and not args.no_notify:
-            send_notification(APP_NAME, message)
-
-    sig, overlay, info = detect_doors(image_bgr, trim_margin=trim, return_debug=args.calibrate)
-    if sig is None and trim > 0.0:
-        retry_sig, retry_overlay, retry_info = detect_doors(
-            image_bgr, trim_margin=0.0, return_debug=args.calibrate
-        )
-        if retry_sig is not None:
-            sig, overlay, info = retry_sig, retry_overlay, retry_info
+    sig, overlay, info = detect_doors(
+        image_bgr,
+        trim_margin=trim,
+        return_debug=args.calibrate,
+        retry_untrimmed=(trim > 0.0),
+    )
 
     if args.calibrate:
         out_overlay = BASE_DIR / "calibrate_overlay.png"
         if overlay is not None:
-            cv2.imwrite(str(out_overlay), overlay)
-            print(f"[calibrate] Saved debug overlay -> {out_overlay}")
+            if cv2.imwrite(str(out_overlay), overlay):
+                print(f"[calibrate] Saved debug overlay -> {out_overlay}")
+            else:
+                print(f"[warn] Failed to write debug overlay -> {out_overlay}", file=sys.stderr)
         print(f"[calibrate] Detection info: {info}")
 
     if sig is None:
@@ -148,6 +154,12 @@ def main() -> int:
                 "Zoom out or center the map so both doors are clearly visible."
             )
         return 0
+
+    layouts_db = (
+        sync_layouts()
+        if not args.no_sync
+        else sync_layouts(remote_url="")
+    )
 
     best, candidates = match_layout(sig, layouts_db, min_confidence=args.min_confidence)
     if candidates:
@@ -180,6 +192,10 @@ def main() -> int:
         print(f"[warn] No URL configured for layout {best.layout_id} in urls.py.")
         return 1
 
+    print(f"[launch] Map {best.layout_id} (confidence={best.confidence:.3f}) -> {target_url}")
+    if not args.dry_run:
+        webbrowser.open(target_url, new=2)
+
     if info.get("used_yellow_fallback"):
         door_side = info["used_yellow_fallback"]
         maybe_notify(
@@ -192,9 +208,6 @@ def main() -> int:
             "Zoom out or ensure both doors and room exits are clearly visible."
         )
 
-    print(f"[launch] Map {best.layout_id} (confidence={best.confidence:.3f}) -> {target_url}")
-    if not args.dry_run:
-        webbrowser.open(target_url, new=2)
     return 0
 
 

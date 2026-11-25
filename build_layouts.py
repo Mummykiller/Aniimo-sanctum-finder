@@ -26,11 +26,11 @@ OUTPUT_JSON_PATH = BASE_DIR / "layouts.json"
 IMAGE_EXTS = {".png", ".jpg", ".jpeg", ".webp"}
 
 
-def _sort_key(path: Path) -> tuple[int, str]:
+def _sort_key(path: Path) -> tuple[int, str, str]:
     try:
-        return (0, f"{int(path.stem):08d}")
+        return (0, f"{int(path.stem):08d}", str(path.parent))
     except ValueError:
-        return (1, path.stem)
+        return (1, path.stem, str(path.parent))
 
 
 def _crop_door_from_region(
@@ -141,20 +141,28 @@ def _obtain_door_templates(input_dir: Path, files: list[Path]) -> tuple[np.ndarr
     raise RuntimeError(f"Could not extract Main/Side entrance door templates from {input_dir}")
 
 
+def _precompute_scaled_templates(tpl: np.ndarray) -> list[tuple[np.ndarray, int, int]]:
+    th, tw = tpl.shape[:2]
+    scaled: list[tuple[np.ndarray, int, int]] = []
+    for sc in np.linspace(0.55, 1.35, 17):
+        nw = max(8, int(round(tw * float(sc))))
+        nh = max(8, int(round(th * float(sc))))
+        rt = cv2.resize(tpl, (nw, nh), interpolation=cv2.INTER_AREA)
+        scaled.append((rt, nw, nh))
+    return scaled
+
+
 def _match_door_multiscale(
-    bgr: np.ndarray, tpl: np.ndarray
+    bgr: np.ndarray, scaled_templates: list[tuple[np.ndarray, int, int]]
 ) -> tuple[float, tuple[float, float], int]:
     best_val = -1.0
     best_pt = (0.0, 0.0)
     best_h = 0
-    th, tw = tpl.shape[:2]
+    bh, bw = bgr.shape[:2]
 
-    for sc in np.linspace(0.55, 1.35, 17):
-        nw = max(8, int(round(tw * float(sc))))
-        nh = max(8, int(round(th * float(sc))))
-        if nw >= bgr.shape[1] or nh >= bgr.shape[0]:
+    for rt, nw, nh in scaled_templates:
+        if nw >= bw or nh >= bh:
             continue
-        rt = cv2.resize(tpl, (nw, nh), interpolation=cv2.INTER_AREA)
         res = cv2.matchTemplate(bgr, rt, cv2.TM_CCOEFF_NORMED)
         _, max_val, _, max_loc = cv2.minMaxLoc(res)
         if max_val > best_val:
@@ -186,6 +194,8 @@ def build_layouts_db(input_dir: Path, output_path: Path = OUTPUT_JSON_PATH) -> d
     files.sort(key=_sort_key)
 
     tpl_main, tpl_side = _obtain_door_templates(input_dir, files)
+    scaled_main = _precompute_scaled_templates(tpl_main)
+    scaled_side = _precompute_scaled_templates(tpl_side)
 
     layouts: dict[str, dict] = {}
     for img_path in files:
@@ -202,8 +212,8 @@ def build_layouts_db(input_dir: Path, output_path: Path = OUTPUT_JSON_PATH) -> d
             print(f"[warn] Could not read image: {img_path}")
             continue
 
-        vm, pm, hm = _match_door_multiscale(img_bgr, tpl_main)
-        vs, ps, _ = _match_door_multiscale(img_bgr, tpl_side)
+        vm, pm, hm = _match_door_multiscale(img_bgr, scaled_main)
+        vs, ps, _ = _match_door_multiscale(img_bgr, scaled_side)
         if vm < 0.75 or vs < 0.75:
             print(
                 f"[warn] Failed to detect both doors in {img_path.relative_to(input_dir)} "
@@ -233,10 +243,14 @@ def build_layouts_db(input_dir: Path, output_path: Path = OUTPUT_JSON_PATH) -> d
             f"exits={entry['exits']}"
         )
 
+    if not layouts:
+        raise RuntimeError(f"No valid layout signatures extracted from {input_dir}; refusing to overwrite {output_path}.")
+
     db = {
         "version": prev_version + 1,
         "layouts": layouts,
     }
+    output_path.parent.mkdir(parents=True, exist_ok=True)
     output_path.write_text(json.dumps(db, indent=2) + "\n", encoding="utf-8")
     print(f"\nWrote {len(layouts)} layout signatures (version {db['version']}) -> {output_path}")
     return db

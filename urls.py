@@ -26,4 +26,6 @@ LAYOUT_URLS: dict[int, str] = {
 def get_url_for_layout(layout_id: int) -> str:
     """Return the destination URL for a matched integer layout ID."""
     lid = int(layout_id)
+    if lid <= 0:
+        return ""
     return LAYOUT_URLS.get(lid, f"{BASE_SANCTUM_URL}#plan-{lid}")
