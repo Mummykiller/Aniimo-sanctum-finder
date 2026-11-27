@@ -25,13 +25,15 @@ A lightweight hotkey launcher for **Aniimo** that snapshots your in-game Sanctum
 <summary><strong>Windows</strong> (Install, Hotkey & Notifications)</summary>
 
 1. Install **Python 3.10+** from [python.org](https://www.python.org/downloads/) (check **"Add Python to PATH"**).
-2. Download or clone this repository and double-click **`install_windows.bat`** inside `Aniimo-sanctum-finder`.
-   - Creates `.venv`, installs dependencies, and places an **Aniimo Sanctum Finder** shortcut on your Desktop.
+2. Download and **Extract All** from the ZIP (don't run from inside the ZIP preview), then double-click **`install_windows.bat`** inside `Aniimo-sanctum-finder`.
+   - Creates `.venv`, installs dependencies, and places a silent **Aniimo Sanctum Finder** shortcut (`pythonw.exe`, no console flash) on your Desktop.
    - *(Running `launch.bat` directly also auto-sets up `.venv` on first launch.)*
 3. **Bind a hotkey:**
    - Right-click **Aniimo Sanctum Finder** on your Desktop → **Properties** → **Shortcut key** → press your hotkey (e.g. `Ctrl+Alt+M`) → **OK**.
-4. **Use it:** Open the Sanctum map in-game so both doors are visible and press your hotkey.
-5. **Notifications:** Uses built-in Windows PowerShell Toast / tray notifications (no extra setup required).
+   - *(Keep the shortcut on your Desktop; moving or deleting it removes the hotkey.)*
+4. **In-game settings:** Use **Borderless Windowed** mode (Exclusive Fullscreen captures a black screen on Windows). If Windows **HDR / Auto-HDR** is on and colors look washed out, disable HDR for accurate door detection. If Aniimo runs as Administrator, Windows blocks unelevated hotkeys while the game has focus.
+5. **Use it:** Open the Sanctum map in-game so both doors are visible and press your hotkey.
+6. **Notifications:** Uses built-in Windows PowerShell Toast / tray notifications (no extra setup required; Windows Focus Assist / Do Not Disturb may mute toasts during gameplay).
 
 </details>
 

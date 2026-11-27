@@ -123,6 +123,20 @@ class TestMainFlows(unittest.TestCase):
         rc = self._run_main(["--test-image", str(ROOT / "does_not_exist_xyz.png"), "--no-sync", "--no-notify"])
         self.assertEqual(rc, 1)
 
+    def test_windows_black_screen_sends_borderless_warning(self) -> None:
+        black_img = np.zeros((100, 100, 3), dtype=np.uint8)
+        with mock.patch.object(sys, "platform", "win32"), \
+             mock.patch("main.capture_primary_monitor", return_value=black_img), \
+             mock.patch("main.detect_doors", return_value=(None, None, {"orange_found": False, "blue_found": False, "used_yellow_fallback": None})), \
+             mock.patch("main.webbrowser.open") as mock_open, \
+             mock.patch("main.send_notification") as mock_notify:
+            rc = self._run_main([])
+
+        self.assertEqual(rc, 0)
+        mock_open.assert_not_called()
+        mock_notify.assert_called_once()
+        self.assertIn("Borderless Windowed", mock_notify.call_args[0][1])
+
 
 class TestBuildLayoutsAndScripts(unittest.TestCase):
     def test_sort_key_is_deterministic_across_tiers(self) -> None:

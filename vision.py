@@ -512,14 +512,23 @@ def measure_starting_room(
 
 
 def _downscale_if_needed(img: np.ndarray, max_dim: int) -> np.ndarray:
-    """Downscale image so its longest side is at most max_dim using area-preserving resampling."""
+    """Downscale image using area-preserving resampling while protecting super-ultrawide height."""
     if max_dim <= 0:
         return img
     h, w = img.shape[:2]
     longest = max(w, h)
+    shortest = min(w, h)
     if longest <= max_dim:
         return img
-    scale = max_dim / float(longest)
+    # On 32:9 super-ultrawide monitors (e.g. 5120x1440, 3840x1080), capping longest side
+    # to 1440 would crush height to ~405px; cap short side to 1080 instead.
+    if longest >= 3200 and shortest > 0 and (longest / float(shortest)) > 2.4:
+        short_cap = min(1080, max_dim)
+        if shortest <= short_cap:
+            return img
+        scale = short_cap / float(shortest)
+    else:
+        scale = max_dim / float(longest)
     new_w = max(1, int(round(w * scale)))
     new_h = max(1, int(round(h * scale)))
     # For >2x downscales (e.g. 4K -> 1440), a fast 2x integer box-filter step first

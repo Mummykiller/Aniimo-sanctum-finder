@@ -87,18 +87,69 @@ def _get_kde_primary_monitor_geometry() -> tuple[tuple[int, int, int, int], tupl
         return None
 
 
+_WINDOWS_DPI_CONFIGURED = False
+
+
+def _enable_windows_dpi_awareness() -> None:
+    """Enable per-monitor DPI awareness (v2 -> v1 -> system) on Windows before mss queries displays."""
+    global _WINDOWS_DPI_CONFIGURED
+    if _WINDOWS_DPI_CONFIGURED or not sys.platform.startswith("win"):
+        return
+    _WINDOWS_DPI_CONFIGURED = True
+    try:
+        import ctypes
+
+        # 1. Windows 10 1703+ / Windows 11: Per-Monitor Aware v2 (-4)
+        try:
+            user32 = ctypes.WinDLL("user32", use_last_error=True)
+            set_ctx = user32.SetProcessDpiAwarenessContext
+            set_ctx.argtypes = [ctypes.c_void_p]
+            set_ctx.restype = ctypes.c_bool
+            if set_ctx(ctypes.c_void_p(-4)):
+                return
+        except Exception:
+            pass
+
+        # 2. Windows 8.1+: Per-Monitor Aware v1 (2)
+        try:
+            shcore = ctypes.WinDLL("shcore", use_last_error=True)
+            set_aware = shcore.SetProcessDpiAwareness
+            set_aware.argtypes = [ctypes.c_int]
+            set_aware.restype = ctypes.c_long
+            if set_aware(2) in (0, -2147024891):  # S_OK or E_ACCESSDENIED (already set)
+                return
+        except Exception:
+            pass
+
+        # 3. Legacy fallback
+        try:
+            user32 = ctypes.WinDLL("user32", use_last_error=True)
+            user32.SetProcessDPIAware.argtypes = []
+            user32.SetProcessDPIAware.restype = ctypes.c_bool
+            user32.SetProcessDPIAware()
+        except Exception:
+            pass
+    except Exception:
+        pass
+
+
 def _capture_mss_primary() -> np.ndarray:
     """Capture the primary monitor via mss and return a BGR numpy array."""
+    _enable_windows_dpi_awareness()
     import mss
 
     with mss.mss() as sct:
         if not sct.monitors:
             raise RuntimeError("No monitors reported by mss.")
         if len(sct.monitors) > 1:
-            # Prefer the OS primary monitor at virtual origin (0, 0), else monitors[1].
+            # Prefer mss >= 10.2 explicit is_primary flag, then OS primary origin (0, 0), else monitors[1].
+            phys = sct.monitors[1:]
             monitor = next(
-                (m for m in sct.monitors[1:] if m.get("left") == 0 and m.get("top") == 0),
-                sct.monitors[1],
+                (m for m in phys if m.get("is_primary") is True),
+                next(
+                    (m for m in phys if m.get("left") == 0 and m.get("top") == 0),
+                    phys[0],
+                ),
             )
         else:
             monitor = sct.monitors[0]

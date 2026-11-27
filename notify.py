@@ -12,12 +12,15 @@ import os
 import shutil
 import subprocess
 import sys
+from pathlib import Path
 
 APP_NAME = "Aniimo Sanctum Finder"
 
 _WIN_POWERSHELL_NOTIFY = r"""
 $t = $env:ANIIMO_NOTIFY_TITLE
 $m = $env:ANIIMO_NOTIFY_MSG
+if ([string]::IsNullOrWhiteSpace($t)) { $t = 'Aniimo Sanctum Finder' }
+if ([string]::IsNullOrWhiteSpace($m)) { $m = ' ' }
 try {
     [Windows.UI.Notifications.ToastNotificationManager, Windows.UI.Notifications, ContentType = WindowsRuntime] | Out-Null
     [Windows.Data.Xml.Dom.XmlDocument, Windows.Data.Xml.Dom.XmlDocument, ContentType = WindowsRuntime] | Out-Null
@@ -39,17 +42,27 @@ try {
     $n.BalloonTipText = $m
     $n.Visible = $true
     $n.ShowBalloonTip(5000)
-    Start-Sleep -Milliseconds 1500
+    Start-Sleep -Milliseconds 4500
     $n.Dispose()
 }
 """.strip()
+
+
+def _find_windows_powershell() -> str | None:
+    """Prefer Windows PowerShell 5.1 (supports WinRT Toast API) before PATH/pwsh fallbacks."""
+    sys_root = os.environ.get("SystemRoot", "").strip()
+    if sys_root:
+        ps51 = Path(sys_root) / "System32" / "WindowsPowerShell" / "v1.0" / "powershell.exe"
+        if ps51.is_file():
+            return str(ps51)
+    return shutil.which("powershell") or shutil.which("pwsh")
 
 
 def send_notification(title: str, message: str) -> bool:
     """Send a non-fatal desktop notification on Linux or Windows. Returns True if dispatched."""
     try:
         if sys.platform.startswith("win"):
-            ps = shutil.which("powershell") or shutil.which("pwsh")
+            ps = _find_windows_powershell()
             if not ps:
                 return False
             env = os.environ.copy()
@@ -61,7 +74,7 @@ def send_notification(title: str, message: str) -> bool:
                 env=env,
                 stdout=subprocess.DEVNULL,
                 stderr=subprocess.DEVNULL,
-                timeout=6,
+                timeout=10,
                 creationflags=creationflags,
                 check=False,
             )

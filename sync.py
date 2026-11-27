@@ -9,6 +9,7 @@ import json
 import math
 import os
 import tempfile
+import time
 import urllib.error
 import urllib.request
 from pathlib import Path
@@ -84,7 +85,14 @@ def _atomic_write_json(path: Path, data: dict[str, Any]) -> None:
             tmp_path = Path(fh.name)
             fh.write(payload)
             fh.flush()
-        os.replace(tmp_path, path)
+        for attempt in range(5):
+            try:
+                os.replace(tmp_path, path)
+                break
+            except PermissionError:
+                if attempt == 4:
+                    raise
+                time.sleep(0.05)
     finally:
         if tmp_path is not None and tmp_path.exists():
             try:

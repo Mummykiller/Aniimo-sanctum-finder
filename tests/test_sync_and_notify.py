@@ -148,6 +148,25 @@ class TestNotify(unittest.TestCase):
         self.assertEqual(captured["env"]["ANIIMO_NOTIFY_TITLE"], "Title'\"$()")
         self.assertEqual(captured["env"]["ANIIMO_NOTIFY_MSG"], "Msg `test`")
 
+    def test_windows_atomic_write_retries_permission_error(self) -> None:
+        with tempfile.TemporaryDirectory() as td:
+            target = Path(td) / "layouts.json"
+            real_replace = os.replace
+            attempts = {"n": 0}
+
+            def flaky_replace(src, dst):
+                attempts["n"] += 1
+                if attempts["n"] < 3:
+                    raise PermissionError("AV lock")
+                return real_replace(src, dst)
+
+            with mock.patch("sync.os.replace", side_effect=flaky_replace), \
+                 mock.patch("sync.time.sleep"):
+                sync._atomic_write_json(target, _valid_db(7))
+
+            self.assertEqual(attempts["n"], 3)
+            self.assertEqual(json.loads(target.read_text(encoding="utf-8"))["version"], 7)
+
 
 if __name__ == "__main__":
     unittest.main()

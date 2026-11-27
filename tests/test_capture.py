@@ -157,6 +157,33 @@ class TestCapture(unittest.TestCase):
             with self.assertRaises(RuntimeError):
                 capture._capture_mss_primary()
 
+    def test_mss_prefers_explicit_is_primary_flag(self) -> None:
+        bgra_arr = np.zeros((2, 2, 4), dtype=np.uint8)
+        grabbed: list[dict] = []
+
+        class FakeMSSPrimary:
+            monitors = [
+                {"left": 0, "top": 0, "width": 3840, "height": 1080},
+                {"left": 0, "top": 0, "width": 1920, "height": 1080, "is_primary": False},
+                {"left": 1920, "top": 0, "width": 1920, "height": 1080, "is_primary": True},
+            ]
+
+            def __enter__(self):
+                return self
+
+            def __exit__(self, *exc):
+                return False
+
+            def grab(self, mon):
+                grabbed.append(mon)
+                return SimpleNamespace(bgra=bgra_arr.tobytes(), width=2, height=2)
+
+        with mock.patch.dict(sys.modules, {"mss": SimpleNamespace(mss=FakeMSSPrimary)}):
+            capture._capture_mss_primary()
+
+        self.assertEqual(grabbed[0]["left"], 1920)
+        self.assertTrue(grabbed[0]["is_primary"])
+
 
 if __name__ == "__main__":
     unittest.main()

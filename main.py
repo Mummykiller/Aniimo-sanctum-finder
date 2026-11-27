@@ -31,6 +31,7 @@ import webbrowser
 from pathlib import Path
 
 import cv2
+import numpy as np
 
 from capture import capture_primary_monitor
 from matcher import match_layout
@@ -59,14 +60,75 @@ def _set_low_cpu_priority() -> None:
             pass
     elif sys.platform.startswith("win"):
         try:
-            kernel32 = ctypes.windll.kernel32
+            from ctypes import wintypes
+
+            kernel32 = ctypes.WinDLL("kernel32", use_last_error=True)
+            kernel32.GetCurrentProcess.argtypes = []
+            kernel32.GetCurrentProcess.restype = wintypes.HANDLE
+            kernel32.SetPriorityClass.argtypes = [wintypes.HANDLE, wintypes.DWORD]
+            kernel32.SetPriorityClass.restype = wintypes.BOOL
             handle = kernel32.GetCurrentProcess()
             kernel32.SetPriorityClass(handle, 0x00004000)  # BELOW_NORMAL_PRIORITY_CLASS
         except Exception:
             pass
 
 
+def _configure_utf8_stdio() -> None:
+    """Ensure stdout/stderr work safely under pythonw.exe and non-UTF-8 Windows locales."""
+    if sys.stdout is None or sys.stderr is None:
+        log_path = BASE_DIR / "launcher.log"
+        stream = None
+        try:
+            if log_path.exists() and log_path.stat().st_size > 1_048_576:
+                try:
+                    log_path.replace(BASE_DIR / "launcher.log.1")
+                except OSError:
+                    pass
+            stream = log_path.open("a", encoding="utf-8", errors="replace", buffering=1)
+        except OSError:
+            stream = open(os.devnull, "w", encoding="utf-8")
+        if sys.stdout is None:
+            sys.stdout = stream
+        if sys.stderr is None:
+            sys.stderr = stream
+        return
+
+    for stream in (sys.stdout, sys.stderr):
+        reconfigure = getattr(stream, "reconfigure", None)
+        if callable(reconfigure):
+            try:
+                reconfigure(encoding="utf-8", errors="replace")
+            except Exception:
+                pass
+
+
+def _read_image_unicode(path: Path) -> np.ndarray | None:
+    """Read an image via Python bytes + cv2.imdecode so non-ASCII Windows paths work."""
+    try:
+        raw = path.read_bytes()
+    except OSError:
+        return None
+    if not raw:
+        return None
+    buf = np.frombuffer(raw, dtype=np.uint8)
+    return cv2.imdecode(buf, cv2.IMREAD_COLOR)
+
+
+def _write_image_unicode(path: Path, image: np.ndarray) -> bool:
+    """Write an image via cv2.imencode + Path.write_bytes so non-ASCII Windows paths work."""
+    try:
+        ext = path.suffix or ".png"
+        ok, encoded = cv2.imencode(ext, image)
+        if not ok:
+            return False
+        path.write_bytes(encoded.tobytes())
+        return True
+    except OSError:
+        return False
+
+
 def main() -> int:
+    _configure_utf8_stdio()
     _set_low_cpu_priority()
     parser = argparse.ArgumentParser(description="Aniimo Sanctum Adaptive Hotkey Launcher")
     parser.add_argument(
@@ -112,7 +174,7 @@ def main() -> int:
 
     # Capture screen BEFORE remote sync so slow/offline DNS never delays capturing the map.
     if args.test_image is not None:
-        image_bgr = cv2.imread(str(args.test_image))
+        image_bgr = _read_image_unicode(args.test_image)
         if image_bgr is None:
             print(f"[error] Could not read test image: {args.test_image}", file=sys.stderr)
             return 1
@@ -136,13 +198,27 @@ def main() -> int:
     if args.calibrate:
         out_overlay = BASE_DIR / "calibrate_overlay.png"
         if overlay is not None:
-            if cv2.imwrite(str(out_overlay), overlay):
+            if _write_image_unicode(out_overlay, overlay):
                 print(f"[calibrate] Saved debug overlay -> {out_overlay}")
             else:
                 print(f"[warn] Failed to write debug overlay -> {out_overlay}", file=sys.stderr)
         print(f"[calibrate] Detection info: {info}")
 
     if sig is None:
+        if (
+            sys.platform.startswith("win")
+            and args.test_image is None
+            and not info["orange_found"]
+            and not info["blue_found"]
+            and image_bgr.size > 0
+            and int(image_bgr.max()) <= 2
+        ):
+            print("[warn] Captured an all-black screen on Windows (Exclusive Fullscreen?).")
+            maybe_notify(
+                "Captured a black screen. Switch Aniimo from Exclusive Fullscreen "
+                "to Borderless Windowed mode and try again."
+            )
+            return 0
         print(
             "[info] Both orange and blue Sanctum doors were not detected on screen "
             f"(orange={info['orange_found']}, blue={info['blue_found']}). Exiting safely."
